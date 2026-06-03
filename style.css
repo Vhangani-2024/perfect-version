@@ -71,6 +71,7 @@ body {
 }
 
 #dataTable th, #dataTable td {
+  background-color: #f0f0f0;
   border: 1px solid #ddd;
   padding: 10px;
   text-align: left;
