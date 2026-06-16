@@ -8,6 +8,10 @@
 </head>
 <body>
   <h1>Business Data</h1>
+
+  <!-- Connection status banner -->
+  <p id="statusMsg" style="font-weight:bold;"></p>
+
   <form id="businessForm">
   Name: 
       <select id="name">
@@ -37,7 +41,7 @@
              <option value="-">-</option> 
   </select><br>
   Stock 2: 
-  <select id="stock2">Phuluso
+  <select id="stock2">
      <option value="snack">Snack</option>
             <option value="cigerattes">Cigerattes</option>
             <option value="sweets">Sweets</option>
@@ -88,65 +92,138 @@
 
 <button id="clearBtn">Clear Data</button>
 
-<script>
-const form = document.getElementById('businessForm');
-const tableBody = document.querySelector('#dataTable tbody');                  
-let data = JSON.parse(localStorage.getItem('businessData')) || [];
+<!-- ===================== FIREBASE SETUP ===================== -->
+<!-- 1. Go to https://console.firebase.google.com -->
+<!-- 2. Create a free project -->
+<!-- 3. Build > Firestore Database > Create database (start in test mode) -->
+<!-- 4. Project settings > General > scroll to "Your apps" > Add app > Web (</>) -->
+<!-- 5. Copy the firebaseConfig object Firebase gives you and paste it below, -->
+<!--    replacing the placeholder values. -->
+<!-- ============================================================ -->
 
-form.addEventListener('submit', (e) => {
-  e.preventDefault();
-  const entry = {
-    name: document.getElementById('name').value.trim(),
-    time: document.getElementById('time').value,
-    date: document.getElementById('date').value,
-    item: document.getElementById('item').value,
-    bottles: document.getElementById('bottles').value,
-    amount: document.getElementById('amount').value,
-    stock1: document.getElementById('stock1').value,
-    stock2: document.getElementById('stock2').value,
-    stock3: document.getElementById('stock3').value,
-    stock4: document.getElementById('stock4').value,
-    total: document.getElementById('total').value,
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import {
+    getFirestore,
+    collection,
+    addDoc,
+    getDocs,
+    deleteDoc,
+    query,
+    orderBy
+  } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+  // ===== PASTE YOUR FIREBASE CONFIG HERE =====
+  const firebaseConfig = {
+    apiKey: "AIzaSyDPgT-_LzWi24YX-Xid6oWtO_4PnTok6UA",
+    authDomain: "recycables-business.firebaseapp.com",
+    projectId: "recycables-business",
+    storageBucket: "recycables-business.firebasestorage.app",
+    messagingSenderId: "687229194820",
+    appId: "1:687229194820:web:7d518ac639c6ec49256211"
   };
-  if (entry.name && entry.time) {
-    data.push(entry);
-    localStorage.setItem('businessData', JSON.stringify(data));
-    addRow(entry);
-    form.reset();
-  } else {
-    alert('Fill required fields!');
+  // ============================================
+
+  const statusMsg = document.getElementById('statusMsg');
+  let db;
+  let entriesCol;
+
+  try {
+    const app = initializeApp(firebaseConfig);
+    db = getFirestore(app);
+    entriesCol = collection(db, "businessEntries");
+    statusMsg.textContent = "✅ Connected — data is shared across all devices.";
+    statusMsg.style.color = "green";
+  } catch (err) {
+    statusMsg.textContent = "⚠️ Firebase not configured yet — data will NOT be shared across devices. See comments in the HTML file.";
+    statusMsg.style.color = "red";
+    console.error(err);
   }
-});
 
-                                            
-data.sort((a, b) => new Date(a.date) - new Date(b.date));
-data.forEach(addRow);
+  const form = document.getElementById('businessForm');
+  const tableBody = document.querySelector('#dataTable tbody');
 
-function addRow(entry) {
-  const row = document.createElement('tr');
-  row.innerHTML = `
-    <td>${entry.name}</td>
-    <td>${entry.time}</td>
-    <td>${entry.date}</td>
-    <td>${entry.item}</td>
-    <td>${entry.bottles}</td>
-    <td>${entry.amount}</td>
-    <td>${entry.stock1}</td>
-    <td>${entry.stock2}</td>
-    <td>${entry.stock3}</td>
-    <td>${entry.stock4}</td>
-    <td>${entry.total}</td>
-  `;
-  tableBody.appendChild(row);
-}
+  async function loadEntries() {
+    if (!entriesCol) return;
+    tableBody.innerHTML = '';
+    const q = query(entriesCol, orderBy("date"));
+    const snapshot = await getDocs(q);
+    snapshot.forEach((docSnap) => {
+      addRow(docSnap.data());
+    });
+  }
 
-document.getElementById('clearBtn').addEventListener('click', () => {
-  localStorage.removeItem('businessData');
-  data = [];
-  tableBody.innerHTML = '';                    
-  alert('Data cleared!');
-});
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const entry = {
+      name: document.getElementById('name').value.trim(),
+      time: document.getElementById('time').value,
+      date: document.getElementById('date').value,
+      item: document.getElementById('item').value,
+      bottles: document.getElementById('bottles').value,
+      amount: document.getElementById('amount').value,
+      stock1: document.getElementById('stock1').value,
+      stock2: document.getElementById('stock2').value,
+      stock3: document.getElementById('stock3').value,
+      stock4: document.getElementById('stock4').value,
+      total: document.getElementById('total').value,
+    };
+
+    if (!entry.name || !entry.time) {
+      alert('Fill required fields!');
+      return;
+    }
+
+    if (!entriesCol) {
+      alert('Cannot save: Firebase is not configured yet. See the instructions in the HTML file.');
+      return;
+    }
+
+    try {
+      await addDoc(entriesCol, entry);
+      form.reset();
+      await loadEntries();
+    } catch (err) {
+      alert('Error saving entry: ' + err.message);
+      console.error(err);
+    }
+  });
+
+  function addRow(entry) {
+    const row = document.createElement('tr');
+    row.innerHTML = `
+      <td>${entry.name}</td>
+      <td>${entry.time}</td>
+      <td>${entry.date}</td>
+      <td>${entry.item}</td>
+      <td>${entry.bottles}</td>
+      <td>${entry.amount}</td>
+      <td>${entry.stock1}</td>
+      <td>${entry.stock2}</td>
+      <td>${entry.stock3}</td>
+      <td>${entry.stock4}</td>
+      <td>${entry.total}</td>
+    `;
+    tableBody.appendChild(row);
+  }
+
+  document.getElementById('clearBtn').addEventListener('click', async () => {
+    if (!entriesCol) {
+      alert('Firebase is not configured yet.');
+      return;
+    }
+    if (!confirm('This will delete ALL entries for everyone. Continue?')) return;
+
+    const snapshot = await getDocs(entriesCol);
+    const deletions = snapshot.docs.map((d) => deleteDoc(d.ref));
+    await Promise.all(deletions);
+    tableBody.innerHTML = '';
+    alert('Data cleared for everyone!');
+  });
+
+  // Load existing shared entries on page open
+  loadEntries();
 </script>
-  
+
 </body>
 </html>
